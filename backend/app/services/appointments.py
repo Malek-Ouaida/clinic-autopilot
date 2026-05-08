@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -11,6 +11,7 @@ from app.models import (
     AppointmentStatus,
     AppointmentStatusHistory,
     BlockedTime,
+    Doctor,
     FollowUpRule,
     FollowUpTask,
     Package,
@@ -23,6 +24,7 @@ from app.models import (
     TaskStatus,
     VisitRecord,
     WaitlistEntry,
+    WorkingHour,
 )
 from app.schemas import AppointmentCreate, CompleteAppointmentRequest, RescheduleRequest
 from app.services.events import EventService
@@ -38,6 +40,23 @@ class AppointmentService:
     def _assert_no_conflict(
         self, clinic_id: str, doctor_id: str, starts_at, ends_at, exclude_appointment_id: str | None = None
     ) -> None:
+        if ends_at <= starts_at:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Appointment end must be after start")
+
+        working_hours = list(
+            self.db.scalars(
+                select(WorkingHour).where(
+                    WorkingHour.clinic_id == clinic_id,
+                    WorkingHour.doctor_id == doctor_id,
+                    WorkingHour.day_of_week == starts_at.weekday(),
+                )
+            )
+        )
+        if working_hours and not any(
+            starts_at.time() >= window.start_time and ends_at.time() <= window.end_time for window in working_hours
+        ):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Appointment is outside doctor working hours")
+
         conflict_query = select(Appointment).where(
             Appointment.clinic_id == clinic_id,
             Appointment.doctor_id == doctor_id,
@@ -66,6 +85,16 @@ class AppointmentService:
         patient = self.db.get(Patient, payload.patient_id)
         if not patient or patient.clinic_id != clinic_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
+        doctor = self.db.get(Doctor, payload.doctor_id)
+        if not doctor or doctor.clinic_id != clinic_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doctor not found")
+        service = self.db.get(Service, payload.service_id)
+        if not service or service.clinic_id != clinic_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service not found")
+        if payload.package_id:
+            package = self.db.get(Package, payload.package_id)
+            if not package or package.clinic_id != clinic_id or package.patient_id != payload.patient_id:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Package not found")
         risk_score = min(1.0, 0.25 + (patient.no_show_count * 0.2))
         appointment = Appointment(
             clinic_id=clinic_id,
@@ -175,6 +204,13 @@ class AppointmentService:
                 suggested_message="We can help you find a new time this week. Would tomorrow work?",
             )
         )
+        self.messages.draft(
+            clinic_id=appointment.clinic_id,
+            patient_id=appointment.patient_id,
+            appointment_id=appointment.id,
+            body="A slot opened after your cancellation. We can help you rebook this week.",
+            actor_user_id=actor_user_id,
+        )
         self.events.emit(
             clinic_id=appointment.clinic_id,
             event_type="AppointmentCancelled",
@@ -220,6 +256,13 @@ class AppointmentService:
                 suggested_action="Send no-show recovery message",
                 suggested_message="We missed you today. Would you like us to help you rebook?",
             )
+        )
+        self.messages.draft(
+            clinic_id=appointment.clinic_id,
+            patient_id=appointment.patient_id,
+            appointment_id=appointment.id,
+            body="We missed you today. Would you like us to help you rebook?",
+            actor_user_id=actor_user_id,
         )
         self.events.emit(
             clinic_id=appointment.clinic_id,
@@ -309,4 +352,3 @@ class AppointmentService:
             actor_user_id=actor_user_id,
         )
         return appointment
-

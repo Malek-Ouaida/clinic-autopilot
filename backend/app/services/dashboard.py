@@ -68,6 +68,55 @@ class DashboardService:
             )
         ) or 0
 
+        metrics = {
+            "appointments_today": len(appointments),
+            "confirmed": len(confirmed),
+            "not_confirmed": len(not_confirmed),
+            "high_risk_no_shows": len(high_risk),
+            "follow_ups_due": follow_ups_due,
+            "patients_to_recover": recoverable,
+            "messages_ready": messages_ready,
+            "revenue_at_risk": round(revenue_at_risk / 100, 2),
+        }
+        clinic_pulse = [
+            {"label": "Appointments", "value": metrics["appointments_today"], "status": "neutral"},
+            {"label": "Confirmed", "value": metrics["confirmed"], "status": "confirmed"},
+            {"label": "At risk", "value": metrics["high_risk_no_shows"], "status": "high_risk"},
+            {"label": "Recoverable", "value": metrics["patients_to_recover"], "status": "recovery"},
+            {"label": "Open slot", "value": open_slots, "status": "recovery"},
+            {"label": "Messages", "value": metrics["messages_ready"], "status": "follow_up"},
+        ]
+        priority_stack = [
+            {"title": "Call high-risk patients", "count": len(high_risk), "metadata": "before noon"},
+            {"title": "Fill open slots", "count": open_slots, "metadata": "waitlist candidates ready"},
+            {"title": "Approve reminders", "count": messages_ready, "metadata": "messages ready"},
+        ]
+        recommended_actions = [
+            {
+                "title": "Call high-risk patients",
+                "subtitle": "These patients may not show up unless contacted.",
+                "metadata": "Before noon",
+                "action": "Review calls",
+            },
+            {
+                "title": "Approve patient reminders",
+                "subtitle": "Prepared reminders are ready to send.",
+                "metadata": f"{messages_ready} drafts",
+                "action": "Approve",
+            },
+            {
+                "title": "Fill open slots",
+                "subtitle": "A cancellation created an opening that waitlisted patients can fill.",
+                "metadata": f"{open_slots} open",
+                "action": "Fill slot",
+            },
+            {
+                "title": "Recover missed patients",
+                "subtitle": "Missed or cancelled patients can still be brought back.",
+                "metadata": f"{recoverable} recoverable",
+                "action": "Start recovery",
+            },
+        ]
         live_flow = []
         for appointment in appointments[:8]:
             patient = self.db.get(Patient, appointment.patient_id)
@@ -83,26 +132,19 @@ class DashboardService:
                 }
             )
 
-        return {
-            "appointments_today": len(appointments),
-            "confirmed": len(confirmed),
-            "not_confirmed": len(not_confirmed),
-            "high_risk_no_shows": len(high_risk),
-            "follow_ups_due": follow_ups_due,
-            "patients_to_recover": recoverable,
-            "messages_ready": messages_ready,
-            "revenue_at_risk": round(revenue_at_risk / 100, 2),
-            "priority_stack": [
-                {"title": "Call high-risk patients", "count": len(high_risk), "metadata": "before noon"},
-                {"title": "Fill open slots", "count": open_slots, "metadata": "waitlist candidates ready"},
-                {"title": "Approve reminders", "count": messages_ready, "metadata": "messages ready"},
-            ],
-            "clinic_pulse": {
-                "confirmed": len(confirmed),
-                "at_risk": len(high_risk),
-                "recoverable": recoverable,
-                "open_slot": open_slots,
+        response = {
+            "briefing": {
+                "headline": f"{len(high_risk) or len(not_confirmed)} patients need attention before noon.",
+                "supporting_text": (
+                    "Unconfirmed appointments, open slots, and overdue follow-ups are creating avoidable "
+                    "revenue risk today."
+                ),
+                "status": "clinic_under_control" if len(high_risk) <= 3 else "attention_needed",
             },
+            "clinic_pulse": clinic_pulse,
+            "metrics": metrics,
+            "priority_stack": priority_stack,
+            "recommended_actions": recommended_actions,
             "live_clinic_flow": live_flow,
             "impact_this_month": {
                 "patients_recovered": 32,
@@ -111,6 +153,8 @@ class DashboardService:
                 "insight": "Recovery workflows brought back 11 more patients than last month.",
             },
         }
+        response.update(metrics)
+        return response
 
     def _action_for(self, appointment: Appointment) -> str:
         if appointment.status == AppointmentStatus.UNCONFIRMED:
@@ -197,4 +241,3 @@ class AnalyticsService:
                 "Open slot recovery filled 7 cancelled slots.",
             ],
         }
-

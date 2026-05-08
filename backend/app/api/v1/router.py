@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -18,9 +20,11 @@ from app.models import (
     InboxItem,
     Message,
     Package,
+    PackageSession,
     Patient,
     PreferredLanguage,
     RecoveryOpportunity,
+    RecoveryType,
     Role,
     Service,
     SlotOpportunity,
@@ -68,6 +72,7 @@ from app.schemas import (
 )
 from app.services.appointments import AppointmentService
 from app.services.dashboard import AnalyticsService, DashboardService
+from app.services.events import EventService
 from app.services.messages import MessageService
 
 api_router = APIRouter(prefix="/api/v1")
@@ -518,6 +523,33 @@ def complete_package_session(package_id: str, actor: CurrentActor = Depends(requ
     if package.remaining_sessions > 0:
         package.completed_sessions += 1
         package.remaining_sessions = max(0, package.total_sessions - package.completed_sessions)
+        db.add(
+            PackageSession(
+                clinic_id=actor.clinic_id,
+                package_id=package.id,
+                session_number=package.completed_sessions,
+                completed_at=datetime.utcnow(),
+            )
+        )
+        EventService(db).emit(
+            clinic_id=actor.clinic_id,
+            event_type="PackageSessionCompleted",
+            aggregate_type="package",
+            aggregate_id=package.id,
+            payload={"remaining_sessions": package.remaining_sessions},
+            actor_user_id=actor.user.id,
+        )
+        if package.remaining_sessions <= 1:
+            db.add(
+                RecoveryOpportunity(
+                    clinic_id=actor.clinic_id,
+                    patient_id=package.patient_id,
+                    type=RecoveryType.PACKAGE_INCOMPLETE,
+                    estimated_value_cents=0,
+                    suggested_action="Draft renewal message",
+                    suggested_message="Only one session remains. Would you like to renew your package?",
+                )
+            )
     db.commit()
     db.refresh(package)
     return package
