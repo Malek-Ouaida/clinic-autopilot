@@ -1,36 +1,90 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Clinic Autopilot
 
-## Getting Started
+Clinic Autopilot is a premium AI operations system for private clinics. This repo contains:
 
-First, run the development server:
+- A Next.js frontend in `src/`
+- A FastAPI backend in `app/`
+- PostgreSQL/Alembic persistence
+- Event-driven service workflows for appointments, reminders, recovery, inbox, follow-ups, waitlists, packages, and analytics
+
+## Frontend
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Backend
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create a virtual environment and install the API:
 
-## Learn More
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+```
 
-To learn more about Next.js, take a look at the following resources:
+Start Postgres and Redis:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+docker compose up -d
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Run migrations and seed data:
 
-## Deploy on Vercel
+```bash
+alembic upgrade head
+python scripts/seed.py
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Start the API:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+API health check: [http://localhost:8000/health](http://localhost:8000/health)
+
+Seed users:
+
+- Owner: `owner@karimclinic.com` / `password123`
+- Secretary: `secretary@karimclinic.com` / `password123`
+
+## Backend Checks
+
+```bash
+pytest
+```
+
+## Core API
+
+- `POST /api/v1/auth/register-owner`
+- `POST /api/v1/auth/login`
+- `GET /api/v1/auth/me`
+- `GET /api/v1/dashboard/today`
+- `GET|POST /api/v1/patients`
+- `GET|POST /api/v1/doctors`
+- `GET|POST /api/v1/services`
+- `GET|POST /api/v1/appointments`
+- `POST /api/v1/appointments/{id}/confirm`
+- `POST /api/v1/appointments/{id}/cancel`
+- `POST /api/v1/appointments/{id}/reschedule`
+- `POST /api/v1/appointments/{id}/complete`
+- `POST /api/v1/appointments/{id}/no-show`
+- `GET /api/v1/messages`
+- `POST /api/v1/messages/draft`
+- `POST /api/v1/messages/{id}/approve`
+- `POST /api/v1/messages/{id}/send`
+- `POST /api/v1/messages/mock-reply`
+- `GET /api/v1/inbox`
+- `GET /api/v1/follow-ups`
+- `GET /api/v1/recovery`
+- `GET|POST /api/v1/waitlist`
+- `GET /api/v1/slot-opportunities`
+- `GET|POST /api/v1/packages`
+- `GET|POST /api/v1/visits`
+- `GET /api/v1/analytics/summary`
+- `GET|PATCH /api/v1/settings`
+
