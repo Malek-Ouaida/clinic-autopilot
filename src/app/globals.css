@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f5f7fb;
+  --foreground: #0f172a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 38rem),
+    radial-gradient(circle at top right, rgba(20, 184, 166, 0.06), transparent 40rem),
+    linear-gradient(180deg, #f9fbff 0%, #f5f7fb 48%, #f5f7fb 100%);
+  color: var(--foreground);
+  font-family:
+    Geist, Inter, -apple-system, BlinkMacSystemFont, "SF Pro Display",
+    "SF Pro Text", system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+button,
+a,
+input {
+  outline-color: rgba(20, 118, 126, 0.35);
+}
+
+::selection {
+  background: rgba(37, 99, 235, 0.16);
+}
+
+.surface {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.035),
+    0 14px 32px rgba(15, 23, 42, 0.055);
+  backdrop-filter: blur(18px);
+}
+
+.hero-surface {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eef6ff 100%);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 24px 64px rgba(15, 23, 42, 0.1);
+}
+
+.premium-transition {
+  transition: all 180ms ease-out;
+}
+
+.lift-hover:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.05),
+    0 18px 42px rgba(15, 23, 42, 0.08);
+}
+
+.hairline {
+  border-color: rgba(15, 23, 42, 0.08);
+}
